@@ -1,9 +1,38 @@
 const express = require("express");
 const supabase = require("../supabase/client");
 const router = express.Router();
-require("dotenv").config(); // Load .env for ADMIN_CREDS
 
-const adminCreds = JSON.parse(process.env.ADMIN_CREDS || '{}');
+/**
+ * Build admin credentials map from env vars
+ */
+function buildAdminCreds() {
+  const adminCreds = { 'ALL': {} };
+  
+  // Main admin for "ALL"
+  const mainId = process.env.MAIN_ADMIN_ID;
+  const mainPass = process.env.MAIN_ADMIN_PASSWORD;
+  if (mainId && mainPass) {
+    adminCreds['ALL'][mainId] = mainPass;
+  }
+  
+  // Station-specific admins
+  for (const key in process.env) {
+    if (key.startsWith('ADMIN_') && key.endsWith('_ID')) {
+      const station = key.replace('ADMIN_', '').replace('_ID', '');
+      const passKey = key.replace('_ID', '_PASS');
+      const id = process.env[key];
+      const pass = process.env[passKey];
+      if (id && pass) {
+        if (!adminCreds[station]) {
+          adminCreds[station] = {};
+        }
+        adminCreds[station][id] = pass;
+      }
+    }
+  }
+  
+  return adminCreds;
+}
 
 /**
  * POST: Admin login validation
@@ -13,6 +42,7 @@ router.post("/login", (req, res) => {
   if (!station || !admin_id || !admin_password) {
     return res.status(400).json({ error: "All fields are required" });
   }
+  const adminCreds = buildAdminCreds();
   const stationCreds = adminCreds[station] || {};
   if (stationCreds[admin_id] === admin_password) {
     return res.json({ success: true, message: "Login successful" });
